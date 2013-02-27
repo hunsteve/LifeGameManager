@@ -56,7 +56,9 @@ namespace LifeGameManager
 
                 using (MySqlCommand cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText="select * from `list_task_37`";                    
+                    cmd.CommandText="select * from `list_task_37`";
+
+                    //SELECT * FROM `list_task_37` WHERE Allapot = 0 ORDER BY BeadasDatuma ASC LIMIT 1
                     using (MySqlDataReader rdr = cmd.ExecuteReader())
                     {
                         while (rdr.Read())
