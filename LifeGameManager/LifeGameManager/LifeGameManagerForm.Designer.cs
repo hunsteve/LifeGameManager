@@ -28,34 +28,47 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.button1 = new System.Windows.Forms.Button();
+            this.components = new System.ComponentModel.Container();
+            this.timer1 = new System.Windows.Forms.Timer(this.components);
+            this.textBoxConsole = new System.Windows.Forms.TextBox();
             this.SuspendLayout();
             // 
-            // button1
+            // timer1
             // 
-            this.button1.Location = new System.Drawing.Point(12, 12);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(75, 23);
-            this.button1.TabIndex = 0;
-            this.button1.Text = "button1";
-            this.button1.UseVisualStyleBackColor = true;
-            this.button1.Click += new System.EventHandler(this.button1_Click);
+            this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
             // 
-            // Form1
+            // textBoxConsole
+            // 
+            this.textBoxConsole.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.textBoxConsole.Font = new System.Drawing.Font("Courier New", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.textBoxConsole.Location = new System.Drawing.Point(0, 0);
+            this.textBoxConsole.MaxLength = 10000000;
+            this.textBoxConsole.Multiline = true;
+            this.textBoxConsole.Name = "textBoxConsole";
+            this.textBoxConsole.ReadOnly = true;
+            this.textBoxConsole.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.textBoxConsole.Size = new System.Drawing.Size(983, 307);
+            this.textBoxConsole.TabIndex = 1;
+            // 
+            // LifeGameManagerForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(284, 262);
-            this.Controls.Add(this.button1);
-            this.Name = "Form1";
+            this.ClientSize = new System.Drawing.Size(983, 307);
+            this.Controls.Add(this.textBoxConsole);
+            this.Name = "LifeGameManagerForm";
             this.Text = "LifeGame Manager";
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.LifeGameManagerForm_FormClosing);
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 
         #endregion
 
-        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Timer timer1;
+        private System.Windows.Forms.TextBox textBoxConsole;
+
     }
 }
 

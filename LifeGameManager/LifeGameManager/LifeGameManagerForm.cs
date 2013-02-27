@@ -12,12 +12,91 @@ namespace LifeGameManager
 {
     public partial class LifeGameManagerForm : Form
     {
+
+        int[] taskIDs = { 37, 38, 39 };
+        const int StateNewSubmission = 0;
+        const int StateUnderAutoProcessing = 3;
+        const int StateProcessingFinished = 7;
+        const int StateProcessingAborted = 9;
+
+
+        
+
+        
+        
+        MySqlConnection conn;
+        string[] messageInitials = { "***", "+++", "---" };
+        const int checkInterval = 15000; //15 sec
+        const int verboseLevel = 2;//0 - minimal, 1 - something,  2 - all
+        const string appName = "LifeGameManager V1.0";
+
+
+        enum LGMAppState { NotConnected, Idle, ProcessingOngoing } ;
+        LGMAppState state;
+        Dictionary<string, object> currentJob;
+
+        private void AddLine(string s)
+        {
+            AddLine(s, 0);            
+        }
+
+        private void AddLine(string s, int verbose)
+        {
+            if (verboseLevel >= verbose)
+            {
+                textBoxConsole.Text += "\r\n" + messageInitials[verbose] + " " + s + " " + messageInitials[verbose];
+            }                
+        }
+
+
         public LifeGameManagerForm()
         {
             InitializeComponent();
+            state = LGMAppState.NotConnected;
+            string cs = "Server=hf.mit.bme.hu;Uid=vimia357;Pwd=vimia35753;Database=hf.mit.bme.hu";
+            AddLine("CONNECTING: " + cs);
+            try
+            {
+                conn = new MySqlConnection(cs);
+                conn.Open();
+            }
+            catch(Exception ex) {
+                AddLine("ERROR: " + ex.Message);
+                return;
+            }
+            AddLine("CONNECTION SUCCESSFUL");
+            state = LGMAppState.Idle;
+            startTimer();
+            DoMyJob();
         }
 
-        private void UpdateProcedure(MySqlConnection conn, int taskID, int update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
+        private Dictionary<string, object> GetNextJob(int taskID)
+        {
+            Dictionary<string, object> ret = null;
+            using (MySqlCommand cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateNewSubmission + " ORDER BY BeadasDatuma ASC LIMIT 1";
+                AddLine("sql: " + cmd.CommandText, 2);
+                using (MySqlDataReader rdr = cmd.ExecuteReader())
+                {                    
+                    while (rdr.Read())
+                    {
+                        if (ret == null) ret = new Dictionary<string, object>();
+
+                        string s = "";
+                        for (int i = 0; i < rdr.FieldCount; ++i)
+                        {
+                            s += rdr.GetName(i) + " = " + rdr.GetValue(i) + "; ";
+                            ret.Add(rdr.GetName(i), rdr.GetValue(i));
+                        }
+                        AddLine("received: " + s, 2);
+                    }
+                }
+            }
+            return ret;
+        }
+
+        private void UpdateProcedure(int taskID, int update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
         {
             using (MySqlCommand cmd = conn.CreateCommand())
             {
@@ -26,7 +105,7 @@ namespace LifeGameManager
             }
         }
 
-        private void GetAllViews(MySqlConnection conn)
+        private void GetAllViews()
         {
             using (MySqlCommand cmd = conn.CreateCommand())
             {
@@ -34,50 +113,93 @@ namespace LifeGameManager
             }
         }
 
-        private void GetAllProcs(MySqlConnection conn)
+        private void GetAllProcs()
         {
             using (MySqlCommand cmd = conn.CreateCommand())
             {
                 cmd.CommandText = "SELECT specific_name FROM information_schema.routines;";
             }
         }
-
-
         
-
-        private void button1_Click(object sender, EventArgs e)
+        private void LifeGameManagerForm_FormClosing(object sender, FormClosingEventArgs e)
         {            
-            string cs = "Server=hf.mit.bme.hu;Uid=vimia357;Pwd=vimia35753;Database=hf.mit.bme.hu";
-
-            using (MySqlConnection conn = new MySqlConnection(cs))
+            if (conn != null)
             {
-
-                conn.Open();                
-
-                using (MySqlCommand cmd = conn.CreateCommand())
+                if (state == LGMAppState.ProcessingOngoing)
                 {
-                    cmd.CommandText="select * from `list_task_37`";
-
-                    //SELECT * FROM `list_task_37` WHERE Allapot = 0 ORDER BY BeadasDatuma ASC LIMIT 1
-                    using (MySqlDataReader rdr = cmd.ExecuteReader())
-                    {
-                        while (rdr.Read())
-                        {
-                            for (int i = 0; i < rdr.FieldCount; ++i)
-                            {
-                                Console.Write(rdr.GetName(i) + " = " + rdr.GetValue(i) + "; ");
-                            }
-                            Console.WriteLine();
-                        }
-                    }
+                    //!!! TODO: abort processing
                 }
 
-                //-----------------------------------------------
 
-
-                UpdateProcedure(conn, 37, 5192, 3, "1", "komment", "LifeGameManager V1.0", 1);
-
+                AddLine("CLOSING CONNECTION");
+                try
+                {
+                    conn.Close();
+                    state = LGMAppState.NotConnected;
+                }
+                catch (Exception ex)
+                {              
+                    AddLine("ERROR: " + ex.Message);
+                    return;
+                }
+                AddLine("CONNECTION CLOSED");
             }
         }
+
+        private void startTimer()
+        {
+            timer1.Interval = checkInterval;
+            timer1.Enabled = true;
+            timer1.Start();
+            AddLine("timer started", 2);
+        }
+
+        private void stopTimer()
+        {
+            timer1.Stop();
+            AddLine("timer stopped", 2);
+        }
+
+        private void timer1_Tick(object sender, EventArgs e)
+        {
+            DoMyJob();
+        }
+
+
+        private void DoMyJob()
+        {
+            AddLine("checking database for new jobs", 2);
+            foreach (int taskID in taskIDs)
+            {
+                Dictionary<string, object> job = GetNextJob(taskID);
+                if (job != null)
+                {
+                    AddLine("got a " + taskID + " job, with ID: " + job["ID"], 1);
+
+                    ProcessJob(job, taskID);
+                }
+                else
+                {
+                    AddLine("no job for " + taskID, 2);
+                }
+            }
+        }
+
+        private void ProcessJob(Dictionary<string, object> job, int taskID)
+        {
+            stopTimer();
+            state = LGMAppState.ProcessingOngoing;
+            currentJob = job;
+            
+
+
+            UpdateProcedure(taskID, (int)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+
+            startTimer();
+            state = LGMAppState.Idle;
+            currentJob = null;
+        }
+
+       
     }
 }
