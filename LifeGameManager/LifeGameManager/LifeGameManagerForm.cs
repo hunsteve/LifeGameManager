@@ -10,9 +10,9 @@ using MySql.Data.MySqlClient;
 
 namespace LifeGameManager
 {
-    public partial class Form1 : Form
+    public partial class LifeGameManagerForm : Form
     {
-        public Form1()
+        public LifeGameManagerForm()
         {
             InitializeComponent();
         }

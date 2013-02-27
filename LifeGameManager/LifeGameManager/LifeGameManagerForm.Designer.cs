@@ -1,6 +1,6 @@
 ﻿namespace LifeGameManager
 {
-    partial class Form1
+    partial class LifeGameManagerForm
     {
         /// <summary>
         /// Required designer variable.
