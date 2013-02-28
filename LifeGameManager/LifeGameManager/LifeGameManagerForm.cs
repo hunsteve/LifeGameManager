@@ -6,7 +6,10 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using MySql.Data.MySqlClient; 
+using MySql.Data.MySqlClient;
+using System.IO;
+using System.Globalization;
+using Ionic.Zip;
 
 namespace LifeGameManager
 {
@@ -19,7 +22,9 @@ namespace LifeGameManager
         const int StateProcessingFinished = 7;
         const int StateProcessingAborted = 9;
 
-
+        const string SambaFileSharePath = "y:\\";
+        const string ArchivePath = "c:\\LifeGame\\Archive\\";
+        const string WorkingPath = "c:\\LifeGame\\Uploads\\";
         
 
         
@@ -176,7 +181,7 @@ namespace LifeGameManager
                 {
                     AddLine("got a " + taskID + " job, with ID: " + job["ID"], 1);
 
-                    ProcessJob(job, taskID);
+                    ProcessJob(job);
                 }
                 else
                 {
@@ -185,21 +190,62 @@ namespace LifeGameManager
             }
         }
 
-        private void ProcessJob(Dictionary<string, object> job, int taskID)
+        private void ProcessJob(Dictionary<string, object> job)
         {
             stopTimer();
             state = LGMAppState.ProcessingOngoing;
             currentJob = job;
-            
+            uint taskID = (uint)job["FeladatID"];
 
+            CopyToArchiveAndUnzipToWork(job);
 
-            UpdateProcedure(taskID, (int)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+            //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
 
             startTimer();
             state = LGMAppState.Idle;
             currentJob = null;
         }
 
+        private void CopyToArchiveAndUnzipToWork(Dictionary<string, object> job)
+        {
+            string filename = SambaFileSharePath + (uint)job["FeladatID"] + "\\" + job["Neptun"] + ".zip";
+            string todir = ArchivePath + (uint)job["FeladatID"] + "\\" + job["Neptun"] + "\\";
+            if (!Directory.Exists(todir))
+            {
+                AddLine("creating directory: " + todir, 2);
+                Directory.CreateDirectory(todir);
+            }
+            
+            DateTime dt = (DateTime)job["BeadasDatuma"];            
+            string destFilenameBase = todir + job["Neptun"] + "_" + dt.ToString("yyyyMMddHHmmss");
+            string destFilename = destFilenameBase + ".zip";
+            int i=1;
+            while (File.Exists(destFilename))
+            {
+                destFilename = destFilenameBase + "_" + i + ".zip";
+                ++i;
+            }            
+            AddLine("copying file: " + filename + " to: " + destFilename, 2);
+            File.Copy(filename, destFilename);
+
+            string workingDir = WorkingPath + (uint)job["FeladatID"] + "\\" + job["Neptun"] + "\\";
+
+            if (Directory.Exists(workingDir))
+            {
+                AddLine("deleting directory: " + workingDir, 2);
+                Directory.Delete(workingDir, true);
+            }
+            AddLine("creating directory: " + workingDir, 2);
+            Directory.CreateDirectory(workingDir);
+
+            AddLine("unzipping file: " + destFilename + " to: " + workingDir, 2);
+            using (ZipFile zip = ZipFile.Read(destFilename))
+            {                
+                zip.ExtractAll(workingDir);
+            }           
+        }
+
        
     }
 }
+
