@@ -133,6 +133,7 @@ namespace LifeGameManager
                 if (state == LGMAppState.ProcessingOngoing)
                 {
                     //!!! TODO: abort processing
+                    //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
                 }
 
 
@@ -197,9 +198,19 @@ namespace LifeGameManager
             currentJob = job;
             uint taskID = (uint)job["FeladatID"];
 
-            CopyToArchiveAndUnzipToWork(job);
+            try
+            {
+                CopyToArchiveAndUnzipToWork(job);
 
-            //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+                //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+            }
+            catch (Exception ex)
+            {
+                AddLine("ERROR: " + ex.Message);
+                //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+            }
+
+           
 
             startTimer();
             state = LGMAppState.Idle;
