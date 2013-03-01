@@ -10,6 +10,8 @@ using MySql.Data.MySqlClient;
 using System.IO;
 using System.Globalization;
 using Ionic.Zip;
+using System.Diagnostics;
+using System.Threading;
 
 namespace LifeGameManager
 {
@@ -25,8 +27,10 @@ namespace LifeGameManager
         const string SambaFileSharePath = "y:\\";
         const string ArchivePath = "c:\\LifeGame\\Archive\\";
         const string WorkingPath = "c:\\LifeGame\\Uploads\\";
-        
 
+        const int matlabTime = 60000; //60 sec
+
+        //Dictionary<uint, string> functionName = new Dictionary<uint,string>() { {37, "harc"}, {38, "kaja"}, {39, "szuperkaja"}, };
         
         
         MySqlConnection conn;
@@ -49,7 +53,7 @@ namespace LifeGameManager
         {
             if (verboseLevel >= verbose)
             {
-                textBoxConsole.Text += "\r\n" + messageInitials[verbose] + " " + s + " " + messageInitials[verbose];
+                textBoxConsole.Text += "\r\n" + messageInitials[verbose] + " " + s + " " + messageInitials[verbose];                
             }                
         }
 
@@ -57,22 +61,50 @@ namespace LifeGameManager
         public LifeGameManagerForm()
         {
             InitializeComponent();
-            state = LGMAppState.NotConnected;
-            string cs = "Server=hf.mit.bme.hu;Uid=vimia357;Pwd=vimia35753;Database=hf.mit.bme.hu";
-            AddLine("CONNECTING: " + cs);
-            try
+
+            Process proc = Process.Start("\"c:\\Program Files\\Sandboxie\\Start.exe\"", "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation -r cd('" + WorkingPath + "37" + "'); verify('TEST03')");                      
+            AddLine("starting MATLAB, spawned process id:" + proc.Id, 2);
+
+            ProcessFinder finder = new ProcessFinder(proc.Id, "MATLAB.exe");
+            finder.ProcessFound += new ProcessFoundEventHandler(finder_ProcessFound);                             
+            
+            //state = LGMAppState.NotConnected;
+            //string cs = "Server=hf.mit.bme.hu;Uid=vimia357;Pwd=vimia35753;Database=hf.mit.bme.hu";
+            //AddLine("CONNECTING: " + cs);
+            //try
+            //{
+            //    conn = new MySqlConnection(cs);
+            //    conn.Open();
+            //}
+            //catch(Exception ex) {
+            //    AddLine("ERROR: " + ex.Message);
+            //    return;
+            //}
+            //AddLine("CONNECTION SUCCESSFUL");
+            //state = LGMAppState.Idle;
+            //startTimer();
+            //DoMyJob();
+        }
+
+        void finder_ProcessFound(object sender, uint processId)
+        {
+            this.Invoke((MethodInvoker)delegate
             {
-                conn = new MySqlConnection(cs);
-                conn.Open();
-            }
-            catch(Exception ex) {
-                AddLine("ERROR: " + ex.Message);
-                return;
-            }
-            AddLine("CONNECTION SUCCESSFUL");
-            state = LGMAppState.Idle;
-            startTimer();
-            DoMyJob();
+                AddLine("found MATLAB, process id:" + processId, 2);
+            });
+            Process p = Process.GetProcessById((int)processId);
+            p.EnableRaisingEvents = true;
+            p.Exited += new EventHandler(process_Exited);            
+        }
+
+        void process_Exited(object sender, EventArgs e)
+        {
+            this.Invoke((MethodInvoker)delegate
+            {
+                Process p = (Process)sender;                
+                AddLine("closed MATLAB, process id:" + p.Id, 2);
+            });                
+            
         }
 
         private Dictionary<string, object> GetNextJob(int taskID)
@@ -101,7 +133,7 @@ namespace LifeGameManager
             return ret;
         }
 
-        private void UpdateProcedure(int taskID, int update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
+        private void UpdateProcedure(uint taskID, uint update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
         {
             using (MySqlCommand cmd = conn.CreateCommand())
             {
@@ -133,7 +165,7 @@ namespace LifeGameManager
                 if (state == LGMAppState.ProcessingOngoing)
                 {
                     //!!! TODO: abort processing
-                    //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+                    //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingAborted, "0", "LifeGameManager application terminated", appName, 1);            
                 }
 
 
@@ -196,27 +228,29 @@ namespace LifeGameManager
             stopTimer();
             state = LGMAppState.ProcessingOngoing;
             currentJob = job;
-            uint taskID = (uint)job["FeladatID"];
+            //uint taskID = (uint)job["FeladatID"];
 
             try
             {
                 CopyToArchiveAndUnzipToWork(job);
 
-                //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+                AddLine("processing job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateUnderAutoProcessing, "0", "Feldolgozás alatt...", appName, 1);
+
+                StartProcess(job);
             }
             catch (Exception ex)
             {
                 AddLine("ERROR: " + ex.Message);
-                //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingFinished, "1", "komment", appName, 1);            
+                UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingAborted, "0", ex.Message, appName, 1);            
             }
-
            
-
             startTimer();
             state = LGMAppState.Idle;
             currentJob = null;
         }
 
+        
         private void CopyToArchiveAndUnzipToWork(Dictionary<string, object> job)
         {
             string filename = SambaFileSharePath + (uint)job["FeladatID"] + "\\" + job["Neptun"] + ".zip";
@@ -255,6 +289,23 @@ namespace LifeGameManager
                 zip.ExtractAll(workingDir);
             }           
         }
+
+        private void StartProcess(Dictionary<string, object> job)
+        {
+            Process proc = Process.Start("\"c:\\Program Files\\Sandboxie\\Start.exe\"", "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation -r cd('" + WorkingPath + job["FeladatID"] + "'); verify('" + job["Neptun"] + "')");            
+            //Process proc = Process.Start("\"c:\\Program Files\\MATLAB\\R2007b\\bin\\matlab.exe\"", "-automation -r cd('" + WorkingPath + job["FeladatID"] + "'); verify('" + job["Neptun"] + "')");
+            //proc.Id;
+
+            //Process[] procs = Process.GetProcessesByName("MATLAB");
+            //procs[0].Par
+
+            bool graceful = proc.WaitForExit(matlabTime);
+            if (!graceful)
+            {
+                proc.Kill();
+            }
+        }
+
 
        
     }
