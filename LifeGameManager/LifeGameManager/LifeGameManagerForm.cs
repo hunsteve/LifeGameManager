@@ -28,7 +28,10 @@ namespace LifeGameManager
         const string ArchivePath = "c:\\LifeGame\\Archive\\";
         const string WorkingPath = "c:\\LifeGame\\Uploads\\";
 
-        const int matlabTime = 60000; //60 sec
+        const string ResultFilename = "result.txt";
+        const string OutputFilename = "matlab_output.txt";
+
+        const int timeoutInterval = 60000; //60 sec
 
         //Dictionary<uint, string> functionName = new Dictionary<uint,string>() { {37, "harc"}, {38, "kaja"}, {39, "szuperkaja"}, };
         
@@ -43,6 +46,7 @@ namespace LifeGameManager
         enum LGMAppState { NotConnected, Idle, ProcessingOngoing } ;
         LGMAppState state;
         Dictionary<string, object> currentJob;
+        Process currentMaltabProcess;
 
         private void AddLine(string s)
         {
@@ -60,51 +64,27 @@ namespace LifeGameManager
 
         public LifeGameManagerForm()
         {
-            InitializeComponent();
-
-            Process proc = Process.Start("\"c:\\Program Files\\Sandboxie\\Start.exe\"", "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation -r cd('" + WorkingPath + "37" + "'); verify('TEST03')");                      
-            AddLine("starting MATLAB, spawned process id:" + proc.Id, 2);
-
-            ProcessFinder finder = new ProcessFinder(proc.Id, "MATLAB.exe");
-            finder.ProcessFound += new ProcessFoundEventHandler(finder_ProcessFound);                             
-            
-            //state = LGMAppState.NotConnected;
-            //string cs = "Server=hf.mit.bme.hu;Uid=vimia357;Pwd=vimia35753;Database=hf.mit.bme.hu";
-            //AddLine("CONNECTING: " + cs);
-            //try
-            //{
-            //    conn = new MySqlConnection(cs);
-            //    conn.Open();
-            //}
-            //catch(Exception ex) {
-            //    AddLine("ERROR: " + ex.Message);
-            //    return;
-            //}
-            //AddLine("CONNECTION SUCCESSFUL");
-            //state = LGMAppState.Idle;
-            //startTimer();
-            //DoMyJob();
+            InitializeComponent();                          
         }
 
-        void finder_ProcessFound(object sender, uint processId)
+        private void LifeGameManagerForm_Load(object sender, EventArgs e)
         {
-            this.Invoke((MethodInvoker)delegate
+            state = LGMAppState.NotConnected;
+            string cs = "Server=hf.mit.bme.hu;Uid=vimia357;Pwd=vimia35753;Database=hf.mit.bme.hu";
+            AddLine("CONNECTING: " + cs);
+            try
             {
-                AddLine("found MATLAB, process id:" + processId, 2);
-            });
-            Process p = Process.GetProcessById((int)processId);
-            p.EnableRaisingEvents = true;
-            p.Exited += new EventHandler(process_Exited);            
-        }
-
-        void process_Exited(object sender, EventArgs e)
-        {
-            this.Invoke((MethodInvoker)delegate
+                conn = new MySqlConnection(cs);
+                conn.Open();
+            }
+            catch (Exception ex)
             {
-                Process p = (Process)sender;                
-                AddLine("closed MATLAB, process id:" + p.Id, 2);
-            });                
-            
+                AddLine("ERROR: " + ex.Message);
+                return;
+            }
+            AddLine("CONNECTION SUCCESSFUL");
+            state = LGMAppState.Idle;
+            startTimer(); 
         }
 
         private Dictionary<string, object> GetNextJob(int taskID)
@@ -164,8 +144,8 @@ namespace LifeGameManager
             {
                 if (state == LGMAppState.ProcessingOngoing)
                 {
-                    //!!! TODO: abort processing
-                    //UpdateProcedure(taskID, (uint)job["ID"], StateProcessingAborted, "0", "LifeGameManager application terminated", appName, 1);            
+                    UpdateProcedure((uint)currentJob["FeladatID"], (uint)currentJob["ID"], StateProcessingAborted, "0", "LifeGameManager application terminated", appName, 1);
+                    currentMaltabProcess.Kill();
                 }
 
 
@@ -185,20 +165,21 @@ namespace LifeGameManager
         }
 
         private void startTimer()
-        {
-            timer1.Interval = checkInterval;
-            timer1.Enabled = true;
-            timer1.Start();
-            AddLine("timer started", 2);
+        {            
+            timerJobSchedule.Interval = checkInterval;
+            timerJobSchedule.Start();            
+            AddLine("job schedule timer started", 2);
+
+            DoMyJob();
         }
 
         private void stopTimer()
         {
-            timer1.Stop();
-            AddLine("timer stopped", 2);
+            timerJobSchedule.Stop();
+            AddLine("job schedule timer stopped", 2);
         }
 
-        private void timer1_Tick(object sender, EventArgs e)
+        private void timerJobSchedule_Tick(object sender, EventArgs e)
         {
             DoMyJob();
         }
@@ -212,9 +193,10 @@ namespace LifeGameManager
                 Dictionary<string, object> job = GetNextJob(taskID);
                 if (job != null)
                 {
-                    AddLine("got a " + taskID + " job, with ID: " + job["ID"], 1);
+                    AddLine("got a " + taskID + " job, with ID: " + job["ID"] + " and neptun: " + job["Neptun"], 1);
 
                     ProcessJob(job);
+                    return;
                 }
                 else
                 {
@@ -228,7 +210,6 @@ namespace LifeGameManager
             stopTimer();
             state = LGMAppState.ProcessingOngoing;
             currentJob = job;
-            //uint taskID = (uint)job["FeladatID"];
 
             try
             {
@@ -237,19 +218,71 @@ namespace LifeGameManager
                 AddLine("processing job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
                 UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateUnderAutoProcessing, "0", "Feldolgozás alatt...", appName, 1);
 
-                StartProcess(job);
+                StartMATLABProcess(job);
             }
             catch (Exception ex)
             {
                 AddLine("ERROR: " + ex.Message);
-                UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingAborted, "0", ex.Message, appName, 1);            
+                UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingAborted, "0", ex.Message, appName, 1);
+
+                AddLine("aborted job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                startTimer();
+                state = LGMAppState.Idle;
+                currentJob = null;
             }
-           
+        }
+
+        private void FinishJob(Dictionary<string, object> job)
+        {
+            try
+            {
+                AddLine("reading results for job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                string result;
+                string resultText;
+                ReadMATLABResults(job, out result, out resultText);
+                UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingFinished, result, resultText, appName, 1);
+                AddLine("finished job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+            }
+            catch (Exception ex)
+            {
+                AddLine("ERROR: " + ex.Message);
+                UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingAborted, "0", ex.Message, appName, 1);
+
+                AddLine("aborted job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+            }
+            
             startTimer();
             state = LGMAppState.Idle;
             currentJob = null;
         }
 
+        private void ReadMATLABResults(Dictionary<string, object> job, out string result, out string resultText)
+        {
+            result = "0";
+            resultText = "";
+
+            string workingDir = WorkingPath + (uint)job["FeladatID"] + "\\" + job["Neptun"] + "\\";
+            string resultFile = workingDir + ResultFilename;
+            string outputFile = workingDir + OutputFilename;
+
+            try
+            {
+                AddLine("reading file: " + resultFile, 2);
+                result = File.ReadAllText(resultFile);
+            }
+            catch (Exception ex) {
+                AddLine("ERROR: " + ex.Message);
+            }
+
+            try
+            {
+                AddLine("reading file: " + outputFile, 2);
+                resultText = File.ReadAllText(outputFile);
+            }
+            catch (Exception ex) {
+                AddLine("ERROR: " + ex.Message);
+            }            
+        }
         
         private void CopyToArchiveAndUnzipToWork(Dictionary<string, object> job)
         {
@@ -290,24 +323,68 @@ namespace LifeGameManager
             }           
         }
 
-        private void StartProcess(Dictionary<string, object> job)
+        private void StartMATLABProcess(Dictionary<string, object> job)
         {
-            Process proc = Process.Start("\"c:\\Program Files\\Sandboxie\\Start.exe\"", "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation -r cd('" + WorkingPath + job["FeladatID"] + "'); verify('" + job["Neptun"] + "')");            
-            //Process proc = Process.Start("\"c:\\Program Files\\MATLAB\\R2007b\\bin\\matlab.exe\"", "-automation -r cd('" + WorkingPath + job["FeladatID"] + "'); verify('" + job["Neptun"] + "')");
-            //proc.Id;
+            Process proc = Process.Start("\"c:\\Program Files\\Sandboxie\\Start.exe\"", "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation -r cd('" + WorkingPath + job["FeladatID"] + "');verify('" + job["Neptun"] + "')");
+            AddLine("starting MATLAB, spawned process id:" + proc.Id, 2);
 
-            //Process[] procs = Process.GetProcessesByName("MATLAB");
-            //procs[0].Par
+            ProcessFinder finder = new ProcessFinder(proc.Id, "MATLAB.exe");
+            finder.ProcessFound += new ProcessFoundEventHandler(finder_ProcessFound);  
+            //ide jo lenne valami arra az esetre, ha megse talaljuk meg a processt
+        }
 
-            bool graceful = proc.WaitForExit(matlabTime);
-            if (!graceful)
+        void finder_ProcessFound(object sender, uint processId)
+        {
+            Process p = Process.GetProcessById((int)processId);
+            p.EnableRaisingEvents = true;
+            p.Exited += new EventHandler(process_Exited);
+            currentMaltabProcess = p;
+            this.Invoke((MethodInvoker)delegate
             {
-                proc.Kill();
+                AddLine("found MATLAB, process id:" + processId, 2);
+                startProcessTimeoutTimer();
+            });   
+        }
+
+        void process_Exited(object sender, EventArgs e)
+        {
+            this.Invoke((MethodInvoker)delegate
+            {
+                Process p = (Process)sender;
+                AddLine("closed MATLAB, process id:" + p.Id, 2);
+                stopProcessTimeoutTimer();
+                FinishJob(currentJob);
+            });
+
+        }
+
+        private void timerProcessTimeout_Tick(object sender, EventArgs e)
+        {
+            stopProcessTimeoutTimer();
+            currentMaltabProcess.CloseMainWindow();
+            AddLine("MATLAB timeouted, closing, process id:" + currentMaltabProcess.Id, 2);
+            currentMaltabProcess = null;
+        }
+
+        private void startProcessTimeoutTimer()
+        {
+            timerProcessTimeout.Interval = timeoutInterval;
+            timerProcessTimeout.Start();
+            AddLine("process timeout timer started", 2);
+        }
+
+        private void stopProcessTimeoutTimer()
+        {
+            if (timerProcessTimeout.Enabled)
+            {
+                timerProcessTimeout.Stop();
+                AddLine("process timeout stopped", 2);
             }
         }
 
-
-       
+        
     }
 }
+
+
 

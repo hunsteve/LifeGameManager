@@ -29,13 +29,14 @@
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            this.timer1 = new System.Windows.Forms.Timer(this.components);
+            this.timerJobSchedule = new System.Windows.Forms.Timer(this.components);
             this.textBoxConsole = new System.Windows.Forms.TextBox();
+            this.timerProcessTimeout = new System.Windows.Forms.Timer(this.components);
             this.SuspendLayout();
             // 
-            // timer1
+            // timerJobSchedule
             // 
-            this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
+            this.timerJobSchedule.Tick += new System.EventHandler(this.timerJobSchedule_Tick);
             // 
             // textBoxConsole
             // 
@@ -50,6 +51,10 @@
             this.textBoxConsole.Size = new System.Drawing.Size(983, 307);
             this.textBoxConsole.TabIndex = 1;
             // 
+            // timerProcessTimeout
+            // 
+            this.timerProcessTimeout.Tick += new System.EventHandler(this.timerProcessTimeout_Tick);
+            // 
             // LifeGameManagerForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -59,6 +64,7 @@
             this.Name = "LifeGameManagerForm";
             this.Text = "LifeGame Manager";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.LifeGameManagerForm_FormClosing);
+            this.Load += new System.EventHandler(this.LifeGameManagerForm_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -66,8 +72,9 @@
 
         #endregion
 
-        private System.Windows.Forms.Timer timer1;
+        private System.Windows.Forms.Timer timerJobSchedule;
         private System.Windows.Forms.TextBox textBoxConsole;
+        private System.Windows.Forms.Timer timerProcessTimeout;
 
     }
 }

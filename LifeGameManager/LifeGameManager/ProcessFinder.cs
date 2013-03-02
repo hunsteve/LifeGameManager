@@ -47,8 +47,7 @@ namespace LifeGameManager
             uint parentId = (uint)targetInstance.Properties["ParentProcessId"].Value;
             
             if (procIds.Contains(parentId))
-            {
-                Console.WriteLine("{0} ({1}) was started by {2}", processName, processId, parentId);
+            {                
                 procIds.Add(processId);
                 if (searchedProcessName.Equals(processName))
                 {
