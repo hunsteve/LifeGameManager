@@ -145,7 +145,10 @@ namespace LifeGameManager
                 if (state == LGMAppState.ProcessingOngoing)
                 {
                     UpdateProcedure((uint)currentJob["FeladatID"], (uint)currentJob["ID"], StateProcessingAborted, "0", "LifeGameManager application terminated", appName, 1);
-                    currentMaltabProcess.Kill();
+                    if (currentMaltabProcess != null)
+                    {
+                        currentMaltabProcess.Kill();
+                    }
                 }
 
 
@@ -329,8 +332,8 @@ namespace LifeGameManager
             AddLine("starting MATLAB, spawned process id:" + proc.Id, 2);
 
             ProcessFinder finder = new ProcessFinder(proc.Id, "MATLAB.exe");
-            finder.ProcessFound += new ProcessFoundEventHandler(finder_ProcessFound);  
-            //ide jo lenne valami arra az esetre, ha megse talaljuk meg a processt
+            finder.ProcessFound += new ProcessFoundEventHandler(finder_ProcessFound);
+            startProcessTimeoutTimer();            
         }
 
         void finder_ProcessFound(object sender, uint processId)
@@ -341,8 +344,7 @@ namespace LifeGameManager
             currentMaltabProcess = p;
             this.Invoke((MethodInvoker)delegate
             {
-                AddLine("found MATLAB, process id:" + processId, 2);
-                startProcessTimeoutTimer();
+                AddLine("found MATLAB, process id:" + processId, 2);                
             });   
         }
 
@@ -352,18 +354,23 @@ namespace LifeGameManager
             {
                 Process p = (Process)sender;
                 AddLine("closed MATLAB, process id:" + p.Id, 2);
-                stopProcessTimeoutTimer();
-                FinishJob(currentJob);
+                stopProcessTimeoutTimer();                
             });
 
         }
 
         private void timerProcessTimeout_Tick(object sender, EventArgs e)
-        {
+        {            
+            if (currentMaltabProcess != null)
+            {
+                currentMaltabProcess.CloseMainWindow();
+                AddLine("MATLAB timeouted, closing, process id:" + currentMaltabProcess.Id, 2);
+            }
+            else
+            {
+                AddLine("MATLAB timeouted, process not found", 2);                
+            }
             stopProcessTimeoutTimer();
-            currentMaltabProcess.CloseMainWindow();
-            AddLine("MATLAB timeouted, closing, process id:" + currentMaltabProcess.Id, 2);
-            currentMaltabProcess = null;
         }
 
         private void startProcessTimeoutTimer()
@@ -378,8 +385,11 @@ namespace LifeGameManager
             if (timerProcessTimeout.Enabled)
             {
                 timerProcessTimeout.Stop();
+                currentMaltabProcess = null;
                 AddLine("process timeout stopped", 2);
-            }
+
+                FinishJob(currentJob);
+            }            
         }
 
         
