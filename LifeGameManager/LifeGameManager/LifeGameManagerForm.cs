@@ -18,7 +18,7 @@ namespace LifeGameManager
     public partial class LifeGameManagerForm : Form
     {
 
-        int[] taskIDs = { 37, 38, 39 };
+        int[] taskIDs = { 37, 38, 39 /*,46*/ };
         const int StateNewSubmission = 0;
         const int StateUnderAutoProcessing = 3;
         const int StateProcessingFinished = 7;
@@ -41,7 +41,8 @@ namespace LifeGameManager
         const int checkInterval = 15000; //15 sec
         const int verboseLevel = 2;//0 - minimal, 1 - something,  2 - all
         const string appName = "LifeGameManager V1.0";
-
+        const bool debugModeEnabled = false;
+        const string LogFilename = "log.txt";
 
         enum LGMAppState { NotConnected, Idle, ProcessingOngoing } ;
         LGMAppState state;
@@ -55,10 +56,13 @@ namespace LifeGameManager
 
         private void AddLine(string s, int verbose)
         {
+            string date = DateTime.Now.ToString("yyyy.MM.dd HH:mm:ss ");
+            string line = "\r\n" + date + messageInitials[verbose] + " " + s + " " + messageInitials[verbose];
             if (verboseLevel >= verbose)
             {
-                textBoxConsole.Text += "\r\n" + messageInitials[verbose] + " " + s + " " + messageInitials[verbose];                
-            }                
+                textBoxConsole.Text += line;
+            }
+            File.AppendAllText(LogFilename, line); 
         }
 
 
@@ -92,7 +96,9 @@ namespace LifeGameManager
             Dictionary<string, object> ret = null;
             using (MySqlCommand cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateNewSubmission + " ORDER BY BeadasDatuma ASC LIMIT 1";
+                string debugCriterion = "";
+                if (debugModeEnabled) debugCriterion = " AND Neptun LIKE 'TEST%'";
+                cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateNewSubmission + debugCriterion + " ORDER BY BeadasDatuma ASC LIMIT 1";
                 AddLine("sql: " + cmd.CommandText, 2);
                 using (MySqlDataReader rdr = cmd.ExecuteReader())
                 {                    
@@ -115,6 +121,7 @@ namespace LifeGameManager
 
         private void UpdateProcedure(uint taskID, uint update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
         {
+            AddLine("updating a " + taskID + " job, with ID: " + update_id + " to state: " + update_state + " with result: " + update_result + " and comment: " + update_comment, 1);
             using (MySqlCommand cmd = conn.CreateCommand())
             {
                 cmd.CommandText = "CALL update_task_" + taskID + "(" + update_id + ", " + update_state + ", \"" + update_result + "\", \"" + update_comment + "\", \"" + update_signature + "\", " + update_format + ")";
@@ -196,6 +203,12 @@ namespace LifeGameManager
                 Dictionary<string, object> job = GetNextJob(taskID);
                 if (job != null)
                 {
+                    if (debugModeEnabled && !job["Neptun"].ToString().StartsWith("TEST"))
+                    {
+                        AddLine("ignoring " + taskID + " job, with ID: " + job["ID"] + " and neptun: " + job["Neptun"] + " because not TEST user", 1);
+                        return;
+                    }
+
                     AddLine("got a " + taskID + " job, with ID: " + job["ID"] + " and neptun: " + job["Neptun"], 1);
 
                     ProcessJob(job);
