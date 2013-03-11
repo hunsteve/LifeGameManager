@@ -18,7 +18,7 @@ namespace LifeGameManager
     public partial class LifeGameManagerForm : Form
     {
         //default values
-        int[] taskIDs = { 37, 38, 39 /*,46*/ };
+        int[] taskIDs = { 37, 38, 39 ,46 };
         int StateNewSubmission = 0;
         int StateUnderAutoProcessing = 3;
         int StateProcessingFinished = 7;
@@ -40,6 +40,7 @@ namespace LifeGameManager
 
         int checkInterval = 15000; //15 sec
         int verboseLevel = 2;//0 - minimal, 1 - something,  2 - all
+        int fileVerboseLevel = 2;//0 - minimal, 1 - something,  2 - all
         bool debugModeEnabled = false;
         string LogFilename = "log.txt";
 
@@ -65,6 +66,7 @@ namespace LifeGameManager
         LGMAppState state;
         Dictionary<string, object> currentJob;
         Process currentMaltabProcess;
+        int taskIDoffset = 0;
 
         private void AddLine(string s)
         {
@@ -81,7 +83,10 @@ namespace LifeGameManager
                 textBoxConsole.SelectionStart = textBoxConsole.TextLength;
                 textBoxConsole.ScrollToCaret();
             }
-            File.AppendAllText(LogFilename, line);
+            if (fileVerboseLevel >= verbose)
+            {
+                File.AppendAllText(LogFilename, line);
+            }
         }
 
 
@@ -150,6 +155,8 @@ namespace LifeGameManager
 
                 try { verboseLevel = int.Parse(ini.IniReadValue(iniMaintenance, "verboseLevel"));}
                 catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                try { fileVerboseLevel = int.Parse(ini.IniReadValue(iniMaintenance, "fileVerboseLevel")); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
                 try { debugModeEnabled = bool.Parse(ini.IniReadValue(iniMaintenance, "debugModeEnabled"));}
                 catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
                 LogFilename = ini.IniReadValue(iniMaintenance, "LogFilename");
@@ -179,7 +186,8 @@ namespace LifeGameManager
                 ini.IniWriteValue(iniHWServer, "SambaFileSharePath",SambaFileSharePath);
                 ini.IniWriteValue(iniHWServer, "checkInterval",checkInterval.ToString());                
 
-                ini.IniWriteValue(iniMaintenance, "verboseLevel",verboseLevel.ToString());                
+                ini.IniWriteValue(iniMaintenance, "verboseLevel",verboseLevel.ToString());
+                ini.IniWriteValue(iniMaintenance, "fileVerboseLevel", fileVerboseLevel.ToString()); 
                 ini.IniWriteValue(iniMaintenance, "debugModeEnabled",debugModeEnabled.ToString());                
                 ini.IniWriteValue(iniMaintenance, "LogFilename",LogFilename);
             }            
@@ -292,8 +300,10 @@ namespace LifeGameManager
         private void DoMyJob()
         {
             AddLine("checking database for new jobs", 2);
-            foreach (int taskID in taskIDs)
+
+            for (int i = 0; i < taskIDs.Length; ++i)
             {
+                int taskID = taskIDs[(i + taskIDoffset) % taskIDs.Length];
                 Dictionary<string, object> job = GetNextJob(taskID);
                 if (job != null)
                 {
@@ -313,6 +323,7 @@ namespace LifeGameManager
                     AddLine("no job for " + taskID, 2);
                 }
             }
+            taskIDoffset = (taskIDoffset + 1) % taskIDs.Length;
         }
 
         private void ProcessJob(Dictionary<string, object> job)
