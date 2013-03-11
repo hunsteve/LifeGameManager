@@ -17,33 +17,45 @@ namespace LifeGameManager
 {
     public partial class LifeGameManagerForm : Form
     {
-
+        //default values
         int[] taskIDs = { 37, 38, 39 /*,46*/ };
-        const int StateNewSubmission = 0;
-        const int StateUnderAutoProcessing = 3;
-        const int StateProcessingFinished = 7;
-        const int StateProcessingAborted = 9;
+        int StateNewSubmission = 0;
+        int StateUnderAutoProcessing = 3;
+        int StateProcessingFinished = 7;
+        int StateProcessingAborted = 9;
 
-        const string SambaFileSharePath = "y:\\";
-        const string ArchivePath = "c:\\LifeGame\\Archive\\";
-        const string WorkingPath = "c:\\LifeGame\\Uploads\\";
+        string SambaFileSharePath = "y:\\";
+        string ArchivePath = "c:\\LifeGame\\Archive\\";
+        string WorkingPath = "c:\\LifeGame\\Uploads\\";
 
-        const string ResultFilename = "result.txt";
-        const string OutputFilename = "matlab_output.txt";
+        string ResultFilename = "result.txt";
+        string OutputFilename = "matlab_output.txt";
 
-        const int timeoutInterval = 60000; //60 sec
+        int timeoutInterval = 60000; //60 sec
 
-        //Dictionary<uint, string> functionName = new Dictionary<uint,string>() { {37, "harc"}, {38, "kaja"}, {39, "szuperkaja"}, };
-        
-        
-        MySqlConnection conn;
+        int checkInterval = 15000; //15 sec
+        int verboseLevel = 2;//0 - minimal, 1 - something,  2 - all
+        bool debugModeEnabled = false;
+        string LogFilename = "log.txt";
+
+        string mySqlServer = "hf.mit.bme.hu";
+        string mySqlUser = "vimia357";
+        string mySqlPassword = "vimia35753";
+        string mySqlDatabase = "hf.mit.bme.hu";
+
+        //built in constants        
         string[] messageInitials = { "***", "+++", "---" };
-        const int checkInterval = 15000; //15 sec
-        const int verboseLevel = 2;//0 - minimal, 1 - something,  2 - all
         const string appName = "LifeGameManager V1.0";
-        const bool debugModeEnabled = false;
-        const string LogFilename = "log.txt";
+        const string iniFile = "lifegamemanager.ini";
 
+        const string iniConnection = "mysql_connection";
+        const string iniLifeGame = "lifegame";
+        const string iniHWServer = "hw_server";
+        const string iniMaintenance = "maintenance";
+
+
+        //variables
+        MySqlConnection conn;
         enum LGMAppState { NotConnected, Idle, ProcessingOngoing } ;
         LGMAppState state;
         Dictionary<string, object> currentJob;
@@ -51,7 +63,7 @@ namespace LifeGameManager
 
         private void AddLine(string s)
         {
-            AddLine(s, 0);            
+            AddLine(s, 0);
         }
 
         private void AddLine(string s, int verbose)
@@ -62,19 +74,21 @@ namespace LifeGameManager
             {
                 textBoxConsole.Text += line;
             }
-            File.AppendAllText(LogFilename, line); 
+            File.AppendAllText(LogFilename, line);
         }
 
 
         public LifeGameManagerForm()
         {
-            InitializeComponent();                          
+            InitializeComponent();
         }
 
         private void LifeGameManagerForm_Load(object sender, EventArgs e)
         {
+            ReadSettings();
+
             state = LGMAppState.NotConnected;
-            string cs = "Server=hf.mit.bme.hu;Uid=vimia357;Pwd=vimia35753;Database=hf.mit.bme.hu";
+            string cs = "Server=" + mySqlServer + ";Uid=" + mySqlUser + ";Pwd=" + mySqlPassword + ";Database=" + mySqlDatabase;
             AddLine("CONNECTING: " + cs);
             try
             {
@@ -88,7 +102,72 @@ namespace LifeGameManager
             }
             AddLine("CONNECTION SUCCESSFUL");
             state = LGMAppState.Idle;
-            startTimer(); 
+            startTimer();
+        }
+
+        private void ReadSettings()
+        {
+            string inifile = Environment.CurrentDirectory + "\\" + iniFile;
+            IniFile ini = new IniFile(inifile);
+            if (File.Exists(inifile))
+            {
+                mySqlServer = ini.IniReadValue(iniConnection, "mySqlServer");
+                mySqlUser = ini.IniReadValue(iniConnection, "mySqlUser");
+                mySqlPassword = ini.IniReadValue(iniConnection, "mySqlPassword");
+                mySqlDatabase = ini.IniReadValue(iniConnection, "mySqlDatabase");
+
+                ArchivePath = ini.IniReadValue(iniLifeGame, "ArchivePath");
+                WorkingPath = ini.IniReadValue(iniLifeGame, "WorkingPath");
+                ResultFilename = ini.IniReadValue(iniLifeGame, "ResultFilename");
+                OutputFilename = ini.IniReadValue(iniLifeGame, "OutputFilename");
+                try { timeoutInterval = int.Parse(ini.IniReadValue(iniLifeGame, "timeoutInterval")); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                
+                try { taskIDs = Array.ConvertAll(ini.IniReadValue(iniHWServer, "taskIDs").Split(new char[]{','}), s => int.Parse(s.Trim())); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }                
+                try { StateNewSubmission = int.Parse(ini.IniReadValue(iniHWServer, "StateNewSubmission"));}
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                try { StateUnderAutoProcessing = int.Parse(ini.IniReadValue(iniHWServer, "StateUnderAutoProcessing"));}
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                try { StateProcessingFinished = int.Parse(ini.IniReadValue(iniHWServer, "StateProcessingFinished"));}
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                try { StateProcessingAborted = int.Parse(ini.IniReadValue(iniHWServer, "StateProcessingAborted"));}
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                SambaFileSharePath = ini.IniReadValue(iniHWServer, "SambaFileSharePath");
+                try { checkInterval = int.Parse(ini.IniReadValue(iniHWServer, "checkInterval"));}
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+
+                try { verboseLevel = int.Parse(ini.IniReadValue(iniMaintenance, "verboseLevel"));}
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                try { debugModeEnabled = bool.Parse(ini.IniReadValue(iniMaintenance, "debugModeEnabled"));}
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                LogFilename = ini.IniReadValue(iniMaintenance, "LogFilename");
+            }
+            else
+            {
+                ini.IniWriteValue(iniConnection, "mySqlServer",mySqlServer);
+                ini.IniWriteValue(iniConnection, "mySqlUser",mySqlUser);
+                ini.IniWriteValue(iniConnection, "mySqlPassword",mySqlPassword);
+                ini.IniWriteValue(iniConnection, "mySqlDatabase",mySqlDatabase);
+                                 
+                ini.IniWriteValue(iniLifeGame, "ArchivePath",ArchivePath);
+                ini.IniWriteValue(iniLifeGame, "WorkingPath",WorkingPath);
+                ini.IniWriteValue(iniLifeGame, "ResultFilename",ResultFilename);
+                ini.IniWriteValue(iniLifeGame, "OutputFilename",OutputFilename);
+                ini.IniWriteValue(iniLifeGame, "timeoutInterval",timeoutInterval.ToString());
+                                                
+                ini.IniWriteValue(iniHWServer, "taskIDs",taskIDs.Skip(1).Aggregate(taskIDs[0].ToString(), (s, i) => s + "," + i.ToString()));
+                ini.IniWriteValue(iniHWServer, "StateNewSubmission",StateNewSubmission.ToString());                
+                ini.IniWriteValue(iniHWServer, "StateUnderAutoProcessing",StateUnderAutoProcessing.ToString());                
+                ini.IniWriteValue(iniHWServer, "StateProcessingFinished",StateProcessingFinished.ToString());                
+                ini.IniWriteValue(iniHWServer, "StateProcessingAborted",StateProcessingAborted.ToString());
+                ini.IniWriteValue(iniHWServer, "SambaFileSharePath",SambaFileSharePath);
+                ini.IniWriteValue(iniHWServer, "checkInterval",checkInterval.ToString());                
+
+                ini.IniWriteValue(iniMaintenance, "verboseLevel",verboseLevel.ToString());                
+                ini.IniWriteValue(iniMaintenance, "debugModeEnabled",debugModeEnabled.ToString());                
+                ini.IniWriteValue(iniMaintenance, "LogFilename",LogFilename);
+            }            
         }
 
         private Dictionary<string, object> GetNextJob(int taskID)
@@ -101,7 +180,7 @@ namespace LifeGameManager
                 cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateNewSubmission + debugCriterion + " ORDER BY BeadasDatuma ASC LIMIT 1";
                 AddLine("sql: " + cmd.CommandText, 2);
                 using (MySqlDataReader rdr = cmd.ExecuteReader())
-                {                    
+                {
                     while (rdr.Read())
                     {
                         if (ret == null) ret = new Dictionary<string, object>();
@@ -125,7 +204,7 @@ namespace LifeGameManager
             using (MySqlCommand cmd = conn.CreateCommand())
             {
                 cmd.CommandText = "CALL update_task_" + taskID + "(" + update_id + ", " + update_state + ", \"" + update_result + "\", \"" + update_comment + "\", \"" + update_signature + "\", " + update_format + ")";
-                int retval = cmd.ExecuteNonQuery();                
+                int retval = cmd.ExecuteNonQuery();
             }
         }
 
@@ -144,9 +223,9 @@ namespace LifeGameManager
                 cmd.CommandText = "SELECT specific_name FROM information_schema.routines;";
             }
         }
-        
+
         private void LifeGameManagerForm_FormClosing(object sender, FormClosingEventArgs e)
-        {            
+        {
             if (conn != null)
             {
                 if (state == LGMAppState.ProcessingOngoing)
@@ -166,7 +245,7 @@ namespace LifeGameManager
                     state = LGMAppState.NotConnected;
                 }
                 catch (Exception ex)
-                {              
+                {
                     AddLine("ERROR: " + ex.Message);
                     return;
                 }
@@ -175,9 +254,9 @@ namespace LifeGameManager
         }
 
         private void startTimer()
-        {            
+        {
             timerJobSchedule.Interval = checkInterval;
-            timerJobSchedule.Start();            
+            timerJobSchedule.Start();
             AddLine("job schedule timer started", 2);
 
             DoMyJob();
@@ -266,7 +345,7 @@ namespace LifeGameManager
 
                 AddLine("aborted job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
             }
-            
+
             startTimer();
             state = LGMAppState.Idle;
             currentJob = null;
@@ -286,7 +365,8 @@ namespace LifeGameManager
                 AddLine("reading file: " + resultFile, 2);
                 result = File.ReadAllText(resultFile);
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 AddLine("ERROR: " + ex.Message);
             }
 
@@ -295,11 +375,12 @@ namespace LifeGameManager
                 AddLine("reading file: " + outputFile, 2);
                 resultText = File.ReadAllText(outputFile);
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 AddLine("ERROR: " + ex.Message);
-            }            
+            }
         }
-        
+
         private void CopyToArchiveAndUnzipToWork(Dictionary<string, object> job)
         {
             string filename = SambaFileSharePath + (uint)job["FeladatID"] + "\\" + job["Neptun"] + ".zip";
@@ -309,16 +390,16 @@ namespace LifeGameManager
                 AddLine("creating directory: " + todir, 2);
                 Directory.CreateDirectory(todir);
             }
-            
-            DateTime dt = (DateTime)job["BeadasDatuma"];            
+
+            DateTime dt = (DateTime)job["BeadasDatuma"];
             string destFilenameBase = todir + job["Neptun"] + "_" + dt.ToString("yyyyMMddHHmmss");
             string destFilename = destFilenameBase + ".zip";
-            int i=1;
+            int i = 1;
             while (File.Exists(destFilename))
             {
                 destFilename = destFilenameBase + "_" + i + ".zip";
                 ++i;
-            }            
+            }
             AddLine("copying file: " + filename + " to: " + destFilename, 2);
             File.Copy(filename, destFilename);
 
@@ -334,9 +415,9 @@ namespace LifeGameManager
 
             AddLine("unzipping file: " + destFilename + " to: " + workingDir, 2);
             using (ZipFile zip = ZipFile.Read(destFilename))
-            {                
+            {
                 zip.ExtractAll(workingDir);
-            }           
+            }
         }
 
         private void StartMATLABProcess(Dictionary<string, object> job)
@@ -346,7 +427,7 @@ namespace LifeGameManager
 
             ProcessFinder finder = new ProcessFinder(proc.Id, "MATLAB.exe");
             finder.ProcessFound += new ProcessFoundEventHandler(finder_ProcessFound);
-            startProcessTimeoutTimer();            
+            startProcessTimeoutTimer();
         }
 
         void finder_ProcessFound(object sender, uint processId)
@@ -357,8 +438,8 @@ namespace LifeGameManager
             currentMaltabProcess = p;
             this.Invoke((MethodInvoker)delegate
             {
-                AddLine("found MATLAB, process id:" + processId, 2);                
-            });   
+                AddLine("found MATLAB, process id:" + processId, 2);
+            });
         }
 
         void process_Exited(object sender, EventArgs e)
@@ -367,13 +448,13 @@ namespace LifeGameManager
             {
                 Process p = (Process)sender;
                 AddLine("closed MATLAB, process id:" + p.Id, 2);
-                stopProcessTimeoutTimer();                
+                stopProcessTimeoutTimer();
             });
 
         }
 
         private void timerProcessTimeout_Tick(object sender, EventArgs e)
-        {            
+        {
             if (currentMaltabProcess != null)
             {
                 currentMaltabProcess.CloseMainWindow();
@@ -381,7 +462,7 @@ namespace LifeGameManager
             }
             else
             {
-                AddLine("MATLAB timeouted, process not found", 2);                
+                AddLine("MATLAB timeouted, process not found", 2);
             }
             stopProcessTimeoutTimer();
         }
@@ -402,10 +483,10 @@ namespace LifeGameManager
                 AddLine("process timeout stopped", 2);
 
                 FinishJob(currentJob);
-            }            
+            }
         }
 
-        
+
     }
 }
 
