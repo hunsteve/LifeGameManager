@@ -31,6 +31,11 @@ namespace LifeGameManager
         string ResultFilename = "result.txt";
         string OutputFilename = "matlab_output.txt";
 
+        string MatlabStartPath = "\"c:\\Program Files\\Sandboxie\\Start.exe\"";
+        string MatlabArguments = "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation";
+        string verificationScriptName = "verify";
+        string verificationScriptsZip = "Uploads.zip";
+
         int timeoutInterval = 60000; //60 sec
 
         int checkInterval = 15000; //15 sec
@@ -73,6 +78,8 @@ namespace LifeGameManager
             if (verboseLevel >= verbose)
             {
                 textBoxConsole.Text += line;
+                textBoxConsole.SelectionStart = textBoxConsole.TextLength;
+                textBoxConsole.ScrollToCaret();
             }
             File.AppendAllText(LogFilename, line);
         }
@@ -85,7 +92,7 @@ namespace LifeGameManager
 
         private void LifeGameManagerForm_Load(object sender, EventArgs e)
         {
-            ReadSettings();
+            ReadSettings();            
 
             state = LGMAppState.NotConnected;
             string cs = "Server=" + mySqlServer + ";Uid=" + mySqlUser + ";Pwd=" + mySqlPassword + ";Database=" + mySqlDatabase;
@@ -122,6 +129,10 @@ namespace LifeGameManager
                 OutputFilename = ini.IniReadValue(iniLifeGame, "OutputFilename");
                 try { timeoutInterval = int.Parse(ini.IniReadValue(iniLifeGame, "timeoutInterval")); }
                 catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                MatlabStartPath = ini.IniReadValue(iniLifeGame, "MatlabStartPath");
+                MatlabArguments = ini.IniReadValue(iniLifeGame, "MatlabArguments");
+                verificationScriptName = ini.IniReadValue(iniLifeGame, "verificationScriptName");
+                verificationScriptsZip = ini.IniReadValue(iniLifeGame, "verificationScriptsZip");
                 
                 try { taskIDs = Array.ConvertAll(ini.IniReadValue(iniHWServer, "taskIDs").Split(new char[]{','}), s => int.Parse(s.Trim())); }
                 catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }                
@@ -155,6 +166,10 @@ namespace LifeGameManager
                 ini.IniWriteValue(iniLifeGame, "ResultFilename",ResultFilename);
                 ini.IniWriteValue(iniLifeGame, "OutputFilename",OutputFilename);
                 ini.IniWriteValue(iniLifeGame, "timeoutInterval",timeoutInterval.ToString());
+                ini.IniWriteValue(iniLifeGame, "MatlabStartPath", MatlabStartPath);
+                ini.IniWriteValue(iniLifeGame, "MatlabArguments", MatlabArguments);
+                ini.IniWriteValue(iniLifeGame, "verificationScriptName", verificationScriptName);
+                ini.IniWriteValue(iniLifeGame, "verificationScriptsZip", verificationScriptsZip);
                                                 
                 ini.IniWriteValue(iniHWServer, "taskIDs",taskIDs.Skip(1).Aggregate(taskIDs[0].ToString(), (s, i) => s + "," + i.ToString()));
                 ini.IniWriteValue(iniHWServer, "StateNewSubmission",StateNewSubmission.ToString());                
@@ -422,7 +437,17 @@ namespace LifeGameManager
 
         private void StartMATLABProcess(Dictionary<string, object> job)
         {
-            Process proc = Process.Start("\"c:\\Program Files\\Sandboxie\\Start.exe\"", "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation -r cd('" + WorkingPath + job["FeladatID"] + "');verify('" + job["Neptun"] + "')");
+            string verifilename = WorkingPath + job["FeladatID"] + "\\" + verificationScriptName + ".m";
+            if (!File.Exists(verifilename))
+            {
+                AddLine("Not found: " + verifilename + ", unzipping verification scripts:" + verificationScriptsZip, 2);
+                using (ZipFile zip = ZipFile.Read(verificationScriptsZip))
+                {
+                    zip.ExtractAll(WorkingPath);
+                }
+            }
+
+            Process proc = Process.Start(MatlabStartPath, MatlabArguments + " -r cd('" + WorkingPath + job["FeladatID"] + "');" + verificationScriptName + "('" + job["Neptun"] + "')");
             AddLine("starting MATLAB, spawned process id:" + proc.Id, 2);
 
             ProcessFinder finder = new ProcessFinder(proc.Id, "MATLAB.exe");
