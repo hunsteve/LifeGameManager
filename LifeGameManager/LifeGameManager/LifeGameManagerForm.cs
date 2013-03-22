@@ -109,7 +109,7 @@ namespace LifeGameManager
             }
             catch (Exception ex)
             {
-                AddLine("ERROR: " + ex.Message);
+                AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
                 return;
             }
             AddLine("CONNECTION SUCCESSFUL");
@@ -133,32 +133,32 @@ namespace LifeGameManager
                 ResultFilename = ini.IniReadValue(iniLifeGame, "ResultFilename");
                 OutputFilename = ini.IniReadValue(iniLifeGame, "OutputFilename");
                 try { timeoutInterval = int.Parse(ini.IniReadValue(iniLifeGame, "timeoutInterval")); }
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 MatlabStartPath = ini.IniReadValue(iniLifeGame, "MatlabStartPath");
                 MatlabArguments = ini.IniReadValue(iniLifeGame, "MatlabArguments");
                 verificationScriptName = ini.IniReadValue(iniLifeGame, "verificationScriptName");
                 verificationScriptsZip = ini.IniReadValue(iniLifeGame, "verificationScriptsZip");
                 
                 try { taskIDs = Array.ConvertAll(ini.IniReadValue(iniHWServer, "taskIDs").Split(new char[]{','}), s => int.Parse(s.Trim())); }
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }                
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }                
                 try { StateNewSubmission = int.Parse(ini.IniReadValue(iniHWServer, "StateNewSubmission"));}
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 try { StateUnderAutoProcessing = int.Parse(ini.IniReadValue(iniHWServer, "StateUnderAutoProcessing"));}
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 try { StateProcessingFinished = int.Parse(ini.IniReadValue(iniHWServer, "StateProcessingFinished"));}
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 try { StateProcessingAborted = int.Parse(ini.IniReadValue(iniHWServer, "StateProcessingAborted"));}
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 SambaFileSharePath = ini.IniReadValue(iniHWServer, "SambaFileSharePath");
                 try { checkInterval = int.Parse(ini.IniReadValue(iniHWServer, "checkInterval"));}
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
 
                 try { verboseLevel = int.Parse(ini.IniReadValue(iniMaintenance, "verboseLevel"));}
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 try { fileVerboseLevel = int.Parse(ini.IniReadValue(iniMaintenance, "fileVerboseLevel")); }
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 try { debugModeEnabled = bool.Parse(ini.IniReadValue(iniMaintenance, "debugModeEnabled"));}
-                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message); }
+                catch (Exception ex) { AddLine("Error parsing INI file: " + ex.Message + "\r\n" + ex.StackTrace); }
                 LogFilename = ini.IniReadValue(iniMaintenance, "LogFilename");
             }
             else
@@ -269,7 +269,7 @@ namespace LifeGameManager
                 }
                 catch (Exception ex)
                 {
-                    AddLine("ERROR: " + ex.Message);
+                    AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
                     return;
                 }
                 AddLine("CONNECTION CLOSED");
@@ -343,13 +343,14 @@ namespace LifeGameManager
             }
             catch (Exception ex)
             {
-                AddLine("ERROR: " + ex.Message);
+                AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
                 UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingAborted, "0", ex.Message, appName, 1);
 
-                AddLine("aborted job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
-                startTimer();
+                AddLine("aborted job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);                
                 state = LGMAppState.Idle;
                 currentJob = null;
+                stopProcessTimeoutTimer();
+                startTimer();
             }
         }
 
@@ -366,15 +367,15 @@ namespace LifeGameManager
             }
             catch (Exception ex)
             {
-                AddLine("ERROR: " + ex.Message);
+                AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
                 UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingAborted, "0", ex.Message, appName, 1);
 
                 AddLine("aborted job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
             }
-
-            startTimer();
+            
             state = LGMAppState.Idle;
             currentJob = null;
+            startTimer();
         }
 
         private void ReadMATLABResults(Dictionary<string, object> job, out string result, out string resultText)
@@ -393,7 +394,7 @@ namespace LifeGameManager
             }
             catch (Exception ex)
             {
-                AddLine("ERROR: " + ex.Message);
+                AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
             }
 
             try
@@ -403,7 +404,7 @@ namespace LifeGameManager
             }
             catch (Exception ex)
             {
-                AddLine("ERROR: " + ex.Message);
+                AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
             }
         }
 
@@ -518,7 +519,10 @@ namespace LifeGameManager
                 currentMaltabProcess = null;
                 AddLine("process timeout stopped", 2);
 
-                FinishJob(currentJob);
+                if (currentJob != null)
+                {
+                    FinishJob(currentJob);
+                }
             }
         }
 
