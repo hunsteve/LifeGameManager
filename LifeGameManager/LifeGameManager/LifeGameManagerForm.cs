@@ -261,7 +261,7 @@ namespace LifeGameManager
 
         private string SanitizeSQLString(string value)
         {
-             return value.Replace(@"\", @"\\").Replace("'", @"\'");
+            return value.Replace(@"\", @"\\").Replace("'", @"\'").Replace("\"", "\\\"");
         }
 
         private void UpdateProcedure(uint taskID, uint update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
