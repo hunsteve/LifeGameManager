@@ -113,6 +113,7 @@ namespace LifeGameManager
                 return;
             }
             AddLine("CONNECTION SUCCESSFUL");
+            FixUnfinishedJobs();
             state = LGMAppState.Idle;
             startTimer();
         }
@@ -193,6 +194,43 @@ namespace LifeGameManager
             }            
         }
 
+        private void FixUnfinishedJobs()
+        {
+            AddLine("fixing unfinished jobs", 2);
+            for (int i = 0; i < taskIDs.Length; ++i)
+            {
+                int taskID = taskIDs[i];
+
+                List<Dictionary<string, object>> jobs = new List<Dictionary<string, object>>();
+                using (MySqlCommand cmd = conn.CreateCommand())
+                {                                 
+                    cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateUnderAutoProcessing;
+                    AddLine("sql: " + cmd.CommandText, 2);
+                    using (MySqlDataReader rdr = cmd.ExecuteReader())
+                    {
+                        while (rdr.Read())
+                        {
+                            Dictionary<string, object> ret = new Dictionary<string, object>();
+
+                            string s = "";
+                            for (int j = 0; j < rdr.FieldCount; ++j)
+                            {
+                                s += rdr.GetName(j) + " = " + rdr.GetValue(j) + "; ";
+                                ret.Add(rdr.GetName(j), rdr.GetValue(j));
+                            }
+                            AddLine("received unfinished job: " + s, 2);
+                            jobs.Add(ret);
+                        }
+                    }
+                }
+                foreach (Dictionary<string, object> job in jobs)
+                {
+                    UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateNewSubmission, "0", "Félbehagyott javítás újrakezdése", appName, 1);
+                }
+            }
+
+        }
+
         private Dictionary<string, object> GetNextJob(int taskID)
         {
             Dictionary<string, object> ret = null;
@@ -221,12 +259,18 @@ namespace LifeGameManager
             return ret;
         }
 
+        private string SanitizeSQLString(string value)
+        {
+             return value.Replace(@"\", @"\\").Replace("'", @"\'");
+        }
+
         private void UpdateProcedure(uint taskID, uint update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
         {
-            AddLine("updating a " + taskID + " job, with ID: " + update_id + " to state: " + update_state + " with result: " + update_result + " and comment: " + update_comment, 1);
+
+            AddLine("updating a " + taskID + " job, with ID: " + update_id + " to state: " + update_state + " with result: " + SanitizeSQLString(update_result) + " and comment: " + SanitizeSQLString(update_comment), 1);
             using (MySqlCommand cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "CALL update_task_" + taskID + "(" + update_id + ", " + update_state + ", \"" + update_result + "\", \"" + update_comment + "\", \"" + update_signature + "\", " + update_format + ")";
+                cmd.CommandText = "CALL update_task_" + taskID + "(" + update_id + ", " + update_state + ", \"" + SanitizeSQLString(update_result) + "\", \"" + SanitizeSQLString(update_comment) + "\", \"" + update_signature + "\", " + update_format + ")";
                 int retval = cmd.ExecuteNonQuery();
             }
         }
