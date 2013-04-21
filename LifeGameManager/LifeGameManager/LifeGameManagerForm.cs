@@ -51,7 +51,7 @@ namespace LifeGameManager
 
         //built in constants        
         string[] messageInitials = { "***", "+++", "---" };
-        const string appName = "LifeGameManager V1.0";
+        const string appName = "LifeGameManager V1.01";
         const string iniFile = "lifegamemanager.ini";
 
         const string iniConnection = "mysql_connection";
@@ -67,6 +67,7 @@ namespace LifeGameManager
         Dictionary<string, object> currentJob;
         Process currentMaltabProcess;
         int taskIDoffset = 0;
+        bool timeouted;
 
         private void AddLine(string s)
         {
@@ -402,12 +403,23 @@ namespace LifeGameManager
         {
             try
             {
-                AddLine("reading results for job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
-                string result;
-                string resultText;
-                ReadMATLABResults(job, out result, out resultText);
-                UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingFinished, result, resultText, appName, 1);
-                AddLine("finished job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                if (!timeouted)
+                {
+                    AddLine("reading results for job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                    string result;
+                    string resultText;
+                    ReadMATLABResults(job, out result, out resultText);
+                    if (resultText.Length > 250) {
+                        resultText = "% túl hosszú output eleje csonkolva % \r\n" + resultText.Substring(resultText.Length - 250);
+                    }
+                    UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingFinished, result, resultText, appName, 1);
+                    AddLine("finished job " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                }
+                else
+                {
+                    UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingFinished, "0", "Időtúllépés (60 s) miatt a Matlab bezárásra került!", appName, 1);
+                    AddLine("aborted job due to timeout" + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                }
             }
             catch (Exception ex)
             {
@@ -538,7 +550,9 @@ namespace LifeGameManager
         {
             if (currentMaltabProcess != null)
             {
-                currentMaltabProcess.CloseMainWindow();
+                currentMaltabProcess.Kill();
+                Thread.Sleep(100);
+                timeouted = true;
                 AddLine("MATLAB timeouted, closing, process id:" + currentMaltabProcess.Id, 2);
             }
             else
@@ -552,6 +566,7 @@ namespace LifeGameManager
         {
             timerProcessTimeout.Interval = timeoutInterval;
             timerProcessTimeout.Start();
+            timeouted = false;
             AddLine("process timeout timer started", 2);
         }
 
