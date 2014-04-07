@@ -578,9 +578,9 @@ namespace LifeGameManager
         {
             if (currentMaltabProcess != null)
             {
-                currentMaltabProcess.Kill();
-                Thread.Sleep(100);
                 timeouted = true;
+                currentMaltabProcess.Kill();
+                Thread.Sleep(100);                
                 AddLine("MATLAB timeouted, closing, process id:" + currentMaltabProcess.Id, 2);
             }
             else
