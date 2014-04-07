@@ -24,24 +24,24 @@ namespace LifeGameManager
         int StateProcessingFinished = 7;
         int StateProcessingAborted = 9;
 
-        string SambaFileSharePath = "y:\\";
+        string SambaFileSharePath = "z:\\";
         string ArchivePath = "c:\\LifeGame\\Archive\\";
         string WorkingPath = "c:\\LifeGame\\Uploads\\";
 
         string ResultFilename = "result.txt";
         string OutputFilename = "matlab_output.txt";
 
-        string MatlabStartPath = "\"c:\\Program Files\\Sandboxie\\Start.exe\"";
-        string MatlabArguments = "\"c:\\Program Files\\MATLAB\\R2007b\\MATLAB R2007b.lnk\" -automation";
+        string MatlabStartPath = "\"c:\\Program Files\\MATLAB\\R2013a\\bin\\matlab.exe\"";
+        string MatlabArguments = "-automation";
         string verificationScriptName = "verify";
         string verificationScriptsZip = "Uploads.zip";
 
-        int timeoutInterval = 60000; //60 sec
+        int timeoutInterval = 180000; //180 sec
 
-        int checkInterval = 15000; //15 sec
+        int checkInterval = 60000; //60 sec
         int verboseLevel = 2;//0 - minimal, 1 - something,  2 - all
         int fileVerboseLevel = 2;//0 - minimal, 1 - something,  2 - all
-        bool debugModeEnabled = false;
+        bool debugModeEnabled = true;
         string LogFilename = "log.txt";
 
         string mySqlServer = "hf.mit.bme.hu";
@@ -51,7 +51,7 @@ namespace LifeGameManager
 
         //built in constants        
         string[] messageInitials = { "***", "+++", "---" };
-        const string appName = "LifeGameManager V1.01";
+        const string appName = "LifeGameManager V1.02";
         const string iniFile = "lifegamemanager.ini";
 
         const string iniConnection = "mysql_connection";
@@ -101,6 +101,13 @@ namespace LifeGameManager
             ReadSettings();            
 
             state = LGMAppState.NotConnected;
+            ConnectToDatabase();
+            FixUnfinishedJobs();            
+            startTimer();
+        }
+
+        private void ConnectToDatabase()
+        {
             string cs = "Server=" + mySqlServer + ";Uid=" + mySqlUser + ";Pwd=" + mySqlPassword + ";Database=" + mySqlDatabase;
             AddLine("CONNECTING: " + cs);
             try
@@ -114,9 +121,7 @@ namespace LifeGameManager
                 return;
             }
             AddLine("CONNECTION SUCCESSFUL");
-            FixUnfinishedJobs();
             state = LGMAppState.Idle;
-            startTimer();
         }
 
         private void ReadSettings()
@@ -198,64 +203,81 @@ namespace LifeGameManager
         private void FixUnfinishedJobs()
         {
             AddLine("fixing unfinished jobs", 2);
-            for (int i = 0; i < taskIDs.Length; ++i)
+            try
             {
-                int taskID = taskIDs[i];
+                for (int i = 0; i < taskIDs.Length; ++i)
+                {
+                    int taskID = taskIDs[i];
 
-                List<Dictionary<string, object>> jobs = new List<Dictionary<string, object>>();
-                using (MySqlCommand cmd = conn.CreateCommand())
-                {                                 
-                    cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateUnderAutoProcessing;
-                    AddLine("sql: " + cmd.CommandText, 2);
-                    using (MySqlDataReader rdr = cmd.ExecuteReader())
-                    {
-                        while (rdr.Read())
+                    List<Dictionary<string, object>> jobs = new List<Dictionary<string, object>>();
+                    using (MySqlCommand cmd = conn.CreateCommand())
+                    {                                 
+                        cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateUnderAutoProcessing;
+                        AddLine("sql: " + cmd.CommandText, 2);
+                        using (MySqlDataReader rdr = cmd.ExecuteReader())
                         {
-                            Dictionary<string, object> ret = new Dictionary<string, object>();
-
-                            string s = "";
-                            for (int j = 0; j < rdr.FieldCount; ++j)
+                            while (rdr.Read())
                             {
-                                s += rdr.GetName(j) + " = " + rdr.GetValue(j) + "; ";
-                                ret.Add(rdr.GetName(j), rdr.GetValue(j));
+                                Dictionary<string, object> ret = new Dictionary<string, object>();
+
+                                string s = "";
+                                for (int j = 0; j < rdr.FieldCount; ++j)
+                                {
+                                    s += rdr.GetName(j) + " = " + rdr.GetValue(j) + "; ";
+                                    ret.Add(rdr.GetName(j), rdr.GetValue(j));
+                                }
+                                AddLine("received unfinished job: " + s, 2);
+                                jobs.Add(ret);
                             }
-                            AddLine("received unfinished job: " + s, 2);
-                            jobs.Add(ret);
                         }
                     }
-                }
-                foreach (Dictionary<string, object> job in jobs)
-                {
-                    UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateNewSubmission, "0", "Félbehagyott javítás újrakezdése", appName, 1);
+                    foreach (Dictionary<string, object> job in jobs)
+                    {
+                        UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateNewSubmission, "0", "Félbehagyott javítás újrakezdése", appName, 1);
+                    }
                 }
             }
-
+            catch (Exception ex)
+            {
+                AddLine("Error during FixUnfinishedJobs: " + ex.Message + "\r\n" + ex.StackTrace);
+                conn = null;
+                state = LGMAppState.NotConnected;
+            }
         }
 
         private Dictionary<string, object> GetNextJob(int taskID)
         {
             Dictionary<string, object> ret = null;
-            using (MySqlCommand cmd = conn.CreateCommand())
+            try
             {
-                string debugCriterion = "";
-                if (debugModeEnabled) debugCriterion = " AND Neptun LIKE 'TEST%'";
-                cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateNewSubmission + debugCriterion + " ORDER BY BeadasDatuma ASC LIMIT 1";
-                AddLine("sql: " + cmd.CommandText, 2);
-                using (MySqlDataReader rdr = cmd.ExecuteReader())
+                using (MySqlCommand cmd = conn.CreateCommand())
                 {
-                    while (rdr.Read())
+                    string debugCriterion = "";
+                    if (debugModeEnabled) debugCriterion = " AND Neptun LIKE 'TEST%'";
+                    cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateNewSubmission + debugCriterion + " ORDER BY BeadasDatuma ASC LIMIT 1";
+                    AddLine("sql: " + cmd.CommandText, 2);
+                    using (MySqlDataReader rdr = cmd.ExecuteReader())
                     {
-                        if (ret == null) ret = new Dictionary<string, object>();
-
-                        string s = "";
-                        for (int i = 0; i < rdr.FieldCount; ++i)
+                        while (rdr.Read())
                         {
-                            s += rdr.GetName(i) + " = " + rdr.GetValue(i) + "; ";
-                            ret.Add(rdr.GetName(i), rdr.GetValue(i));
+                            if (ret == null) ret = new Dictionary<string, object>();
+
+                            string s = "";
+                            for (int i = 0; i < rdr.FieldCount; ++i)
+                            {
+                                s += rdr.GetName(i) + " = " + rdr.GetValue(i) + "; ";
+                                ret.Add(rdr.GetName(i), rdr.GetValue(i));
+                            }
+                            AddLine("received: " + s, 2);
                         }
-                        AddLine("received: " + s, 2);
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                AddLine("Error during GetNextJob: " + ex.Message + "\r\n" + ex.StackTrace);
+                conn = null;
+                state = LGMAppState.NotConnected;
             }
             return ret;
         }
@@ -267,12 +289,20 @@ namespace LifeGameManager
 
         private void UpdateProcedure(uint taskID, uint update_id, int update_state, string update_result, string update_comment, string update_signature, int update_format)
         {
-
             AddLine("updating a " + taskID + " job, with ID: " + update_id + " to state: " + update_state + " with result: " + SanitizeSQLString(update_result) + " and comment: " + SanitizeSQLString(update_comment), 1);
-            using (MySqlCommand cmd = conn.CreateCommand())
+            try
             {
-                cmd.CommandText = "CALL update_task_" + taskID + "(" + update_id + ", " + update_state + ", \"" + SanitizeSQLString(update_result) + "\", \"" + SanitizeSQLString(update_comment) + "\", \"" + update_signature + "\", " + update_format + ")";
-                int retval = cmd.ExecuteNonQuery();
+                using (MySqlCommand cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "CALL update_task_" + taskID + "(" + update_id + ", " + update_state + ", \"" + SanitizeSQLString(update_result) + "\", \"" + SanitizeSQLString(update_comment) + "\", \"" + update_signature + "\", " + update_format + ")";
+                    int retval = cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                AddLine("Error during UpdateProcedure: " + ex.Message + "\r\n" + ex.StackTrace);
+                conn = null;
+                state = LGMAppState.NotConnected;
             }
         }
 
@@ -344,6 +374,11 @@ namespace LifeGameManager
 
         private void DoMyJob()
         {
+            if (conn == null)
+            {
+                AddLine("Not connected to database, reconnecting...");
+                ConnectToDatabase();
+            }
             AddLine("checking database for new jobs", 2);
 
             for (int i = 0; i < taskIDs.Length; ++i)
@@ -518,23 +553,17 @@ namespace LifeGameManager
             Process proc = Process.Start(MatlabStartPath, MatlabArguments + " -r cd('" + WorkingPath + job["FeladatID"] + "');" + verificationScriptName + "('" + job["Neptun"] + "')");
             AddLine("starting MATLAB, spawned process id:" + proc.Id, 2);
 
-            ProcessFinder finder = new ProcessFinder(proc.Id, "MATLAB.exe");
-            finder.ProcessFound += new ProcessFoundEventHandler(finder_ProcessFound);
+            Process matlabProcess = ProcessFinder.FindProcess(proc.Id, "MATLAB", 10000);
+            if (matlabProcess != null)
+            {
+                matlabProcess.EnableRaisingEvents = true;
+                matlabProcess.Exited += new EventHandler(process_Exited);
+                currentMaltabProcess = matlabProcess;
+                AddLine("found MATLAB, process id:" + matlabProcess.Id, 2);
+            }
             startProcessTimeoutTimer();
         }
-
-        void finder_ProcessFound(object sender, uint processId)
-        {
-            Process p = Process.GetProcessById((int)processId);
-            p.EnableRaisingEvents = true;
-            p.Exited += new EventHandler(process_Exited);
-            currentMaltabProcess = p;
-            this.Invoke((MethodInvoker)delegate
-            {
-                AddLine("found MATLAB, process id:" + processId, 2);
-            });
-        }
-
+      
         void process_Exited(object sender, EventArgs e)
         {
             this.Invoke((MethodInvoker)delegate
@@ -543,7 +572,6 @@ namespace LifeGameManager
                 AddLine("closed MATLAB, process id:" + p.Id, 2);
                 stopProcessTimeoutTimer();
             });
-
         }
 
         private void timerProcessTimeout_Tick(object sender, EventArgs e)

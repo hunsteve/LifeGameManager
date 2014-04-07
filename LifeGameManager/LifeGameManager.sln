@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LifeGameManager", "LifeGameManager\LifeGameManager.csproj", "{2D2E31C8-99D9-488B-8E52-FE5DE5C805EE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProcessTest", "ProcessTest\ProcessTest.csproj", "{575E4AE0-009F-4DF2-9568-D0797B74453F}"
+EndProject
 Global
 	GlobalSection(SubversionScc) = preSolution
 		Svn-Managed = True
@@ -17,6 +19,10 @@ Global
 		{2D2E31C8-99D9-488B-8E52-FE5DE5C805EE}.Debug|x86.Build.0 = Debug|x86
 		{2D2E31C8-99D9-488B-8E52-FE5DE5C805EE}.Release|x86.ActiveCfg = Release|x86
 		{2D2E31C8-99D9-488B-8E52-FE5DE5C805EE}.Release|x86.Build.0 = Release|x86
+		{575E4AE0-009F-4DF2-9568-D0797B74453F}.Debug|x86.ActiveCfg = Debug|x86
+		{575E4AE0-009F-4DF2-9568-D0797B74453F}.Debug|x86.Build.0 = Debug|x86
+		{575E4AE0-009F-4DF2-9568-D0797B74453F}.Release|x86.ActiveCfg = Release|x86
+		{575E4AE0-009F-4DF2-9568-D0797B74453F}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

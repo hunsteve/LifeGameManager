@@ -1,42 +1,12 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Management;
 using System.Diagnostics;
-using System.Threading;
 
-namespace LifeGameManager
-{    
-    class ProcessFinder
-    {        
-        public static Process FindProcess(int parentProcessId, string searchedProcessName, int timeout)
-        {
-            Process pp = null;
-            HashSet<int> seenProcesses = new HashSet<int>();
-            DateTime start = DateTime.Now;
-            while (pp == null && (DateTime.Now - start) < TimeSpan.FromMilliseconds(timeout))
-            {
-                Thread.Sleep(10);
-                Process[] processlist = Process.GetProcesses();
-                foreach (Process p in processlist)
-                {
-                    if (!seenProcesses.Contains(p.Id))
-                    {
-                        seenProcesses.Add(p.Id);
-                        if (p.ProcessName == searchedProcessName && (p.ParentID() == parentProcessId || p.Id == parentProcessId))
-                        {
-                            pp = p;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            return pp;
-        }
-    }
-
+namespace ProcessTest
+{
     public static class ProcessExtensions
     {
         private static string FindIndexedProcessName(int pid)
