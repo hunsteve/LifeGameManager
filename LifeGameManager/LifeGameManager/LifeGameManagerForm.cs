@@ -453,7 +453,7 @@ namespace LifeGameManager
                 else
                 {
                     UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateProcessingFinished, "0", "Időtúllépés (60 s) miatt a Matlab bezárásra került!", appName, 1);
-                    AddLine("aborted job due to timeout" + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
+                    AddLine("aborted job due to timeout " + (uint)job["ID"] + " id: " + (uint)job["FeladatID"] + " neptun: " + job["Neptun"], 2);
                 }
             }
             catch (Exception ex)
@@ -553,13 +553,12 @@ namespace LifeGameManager
             Process proc = Process.Start(MatlabStartPath, MatlabArguments + " -r cd('" + WorkingPath + job["FeladatID"] + "');" + verificationScriptName + "('" + job["Neptun"] + "')");
             AddLine("starting MATLAB, spawned process id:" + proc.Id, 2);
 
-            Process matlabProcess = ProcessFinder.FindProcess(proc.Id, "MATLAB", 10000);
-            if (matlabProcess != null)
+            currentMaltabProcess = ProcessFinder.FindProcess(proc.Id, "MATLAB", 10000);
+            if (currentMaltabProcess != null)
             {
-                matlabProcess.EnableRaisingEvents = true;
-                matlabProcess.Exited += new EventHandler(process_Exited);
-                currentMaltabProcess = matlabProcess;
-                AddLine("found MATLAB, process id:" + matlabProcess.Id, 2);
+                currentMaltabProcess.EnableRaisingEvents = true;
+                currentMaltabProcess.Exited += new EventHandler(process_Exited);                
+                AddLine("found MATLAB, process id:" + currentMaltabProcess.Id, 2);
             }
             startProcessTimeoutTimer();
         }
@@ -570,7 +569,10 @@ namespace LifeGameManager
             {
                 Process p = (Process)sender;
                 AddLine("closed MATLAB, process id:" + p.Id, 2);
-                stopProcessTimeoutTimer();
+                if (currentMaltabProcess != null && p.Id == currentMaltabProcess.Id)
+                {
+                    stopProcessTimeoutTimer();
+                }
             });
         }
 
