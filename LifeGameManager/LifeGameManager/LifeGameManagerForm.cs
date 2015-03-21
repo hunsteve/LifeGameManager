@@ -51,7 +51,7 @@ namespace LifeGameManager
 
         //built in constants        
         string[] messageInitials = { "***", "+++", "---" };
-        const string appName = "LifeGameManager V1.03";
+        const string appName = "LifeGameManager V1.04";
         const string iniFile = "lifegamemanager.ini";
 
         const string iniConnection = "mysql_connection";
@@ -61,8 +61,7 @@ namespace LifeGameManager
 
 
         //variables
-        MySqlConnection conn;
-        enum LGMAppState { NotConnected, Idle, ProcessingOngoing, Closing } ;
+        enum LGMAppState { Idle, ProcessingOngoing } ;
         LGMAppState state;
         Dictionary<string, object> currentJob;
         Process currentMaltabProcess;
@@ -100,16 +99,17 @@ namespace LifeGameManager
         {
             ReadSettings();            
 
-            state = LGMAppState.NotConnected;
+            state = LGMAppState.Idle;
             ConnectToDatabase();
             FixUnfinishedJobs();            
             startTimer();
         }
 
-        private void ConnectToDatabase()
+        private MySqlConnection ConnectToDatabase()
         {
+            MySqlConnection conn;
             string cs = "Server=" + mySqlServer + ";Uid=" + mySqlUser + ";Pwd=" + mySqlPassword + ";Database=" + mySqlDatabase;
-            AddLine("CONNECTING: " + cs);
+            //AddLine("CONNECTING: " + cs, 2);
             try
             {
                 conn = new MySqlConnection(cs);
@@ -118,10 +118,11 @@ namespace LifeGameManager
             catch (Exception ex)
             {
                 AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
-                return;
+                return null;
             }
-            AddLine("CONNECTION SUCCESSFUL");
+            //AddLine("CONNECTION SUCCESSFUL", 2);
             state = LGMAppState.Idle;
+            return conn;
         }
         
         private void ReadSettings()
@@ -210,6 +211,7 @@ namespace LifeGameManager
                     int taskID = taskIDs[i];
 
                     List<Dictionary<string, object>> jobs = new List<Dictionary<string, object>>();
+                    MySqlConnection conn = ConnectToDatabase();
                     using (MySqlCommand cmd = conn.CreateCommand())
                     {                                 
                         cmd.CommandText = "SELECT * FROM `list_task_" + taskID + "` WHERE Allapot = " + StateUnderAutoProcessing;
@@ -235,13 +237,12 @@ namespace LifeGameManager
                     {
                         UpdateProcedure((uint)job["FeladatID"], (uint)job["ID"], StateNewSubmission, "0", "Félbehagyott javítás újrakezdése", appName, 1);
                     }
+                    conn.Close();
                 }
             }
             catch (Exception ex)
             {
                 AddLine("Error during FixUnfinishedJobs: " + ex.Message + "\r\n" + ex.StackTrace);
-                conn = null;
-                state = LGMAppState.NotConnected;
             }
         }
 
@@ -250,6 +251,7 @@ namespace LifeGameManager
             Dictionary<string, object> ret = null;
             try
             {
+                MySqlConnection conn = ConnectToDatabase();
                 using (MySqlCommand cmd = conn.CreateCommand())
                 {
                     string debugCriterion = "";
@@ -271,13 +273,12 @@ namespace LifeGameManager
                         }
                     }
                 }
+                conn.Close();
             }
             catch (Exception ex)
             {
                 ret = null;
                 AddLine("Error during GetNextJob: " + ex.Message + "\r\n" + ex.StackTrace);
-                conn = null;
-                state = LGMAppState.NotConnected;
             }
             return ret;
         }
@@ -292,63 +293,49 @@ namespace LifeGameManager
             AddLine("updating a " + taskID + " job, with ID: " + update_id + " to state: " + update_state + " with result: " + SanitizeSQLString(update_result) + " and comment: " + SanitizeSQLString(update_comment), 1);
             try
             {
+                MySqlConnection conn = ConnectToDatabase();
                 using (MySqlCommand cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "CALL update_task_" + taskID + "(" + update_id + ", " + update_state + ", \"" + SanitizeSQLString(update_result) + "\", \"" + SanitizeSQLString(update_comment) + "\", \"" + update_signature + "\", " + update_format + ")";
                     int retval = cmd.ExecuteNonQuery();
                 }
+                conn.Close();
             }
             catch (Exception ex)
             {
                 AddLine("Error during UpdateProcedure: " + ex.Message + "\r\n" + ex.StackTrace);
-                conn = null;
-                state = LGMAppState.NotConnected;
             }
         }
 
         private void GetAllViews()
         {
+            MySqlConnection conn = ConnectToDatabase();
             using (MySqlCommand cmd = conn.CreateCommand())
             {
                 cmd.CommandText = "SELECT table_name FROM information_schema.views;";
             }
+            conn.Close();
         }
 
         private void GetAllProcs()
         {
+            MySqlConnection conn = ConnectToDatabase();
             using (MySqlCommand cmd = conn.CreateCommand())
             {
                 cmd.CommandText = "SELECT specific_name FROM information_schema.routines;";
             }
+            conn.Close();
         }
 
         private void LifeGameManagerForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (conn != null)
+            if (state == LGMAppState.ProcessingOngoing)
             {
-                if (state == LGMAppState.ProcessingOngoing)
+                UpdateProcedure((uint)currentJob["FeladatID"], (uint)currentJob["ID"], StateProcessingAborted, "0", "LifeGameManager application terminated", appName, 1);
+                if (currentMaltabProcess != null)
                 {
-                    UpdateProcedure((uint)currentJob["FeladatID"], (uint)currentJob["ID"], StateProcessingAborted, "0", "LifeGameManager application terminated", appName, 1);
-                    if (currentMaltabProcess != null)
-                    {
-                        currentMaltabProcess.Kill();
-                    }
+                    currentMaltabProcess.Kill();
                 }
-
-
-                AddLine("CLOSING CONNECTION");
-                try
-                {
-                    state = LGMAppState.Closing;
-                    conn.Close();
-                    state = LGMAppState.NotConnected;
-                }
-                catch (Exception ex)
-                {
-                    AddLine("ERROR: " + ex.Message + "\r\n" + ex.StackTrace);
-                    return;
-                }
-                AddLine("CONNECTION CLOSED");
             }
         }
 
@@ -380,13 +367,7 @@ namespace LifeGameManager
             int errorCount = 0;
 
             for (int i = 0; i < taskIDs.Length; ++i)
-            {
-                if (conn == null)
-                {
-                    AddLine("Not connected to database, reconnecting...");
-                    ConnectToDatabase();
-                }
-
+            {                
                 int taskID = taskIDs[(i + taskIDoffset) % taskIDs.Length];
                 Dictionary<string, object> job = GetNextJob(taskID);                
                 if (job == null)
