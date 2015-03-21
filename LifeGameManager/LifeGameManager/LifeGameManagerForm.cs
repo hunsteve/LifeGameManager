@@ -51,7 +51,7 @@ namespace LifeGameManager
 
         //built in constants        
         string[] messageInitials = { "***", "+++", "---" };
-        const string appName = "LifeGameManager V1.02";
+        const string appName = "LifeGameManager V1.03";
         const string iniFile = "lifegamemanager.ini";
 
         const string iniConnection = "mysql_connection";
@@ -62,7 +62,7 @@ namespace LifeGameManager
 
         //variables
         MySqlConnection conn;
-        enum LGMAppState { NotConnected, Idle, ProcessingOngoing } ;
+        enum LGMAppState { NotConnected, Idle, ProcessingOngoing, Closing } ;
         LGMAppState state;
         Dictionary<string, object> currentJob;
         Process currentMaltabProcess;
@@ -123,7 +123,7 @@ namespace LifeGameManager
             AddLine("CONNECTION SUCCESSFUL");
             state = LGMAppState.Idle;
         }
-
+        
         private void ReadSettings()
         {
             string inifile = Environment.CurrentDirectory + "\\" + iniFile;
@@ -258,10 +258,9 @@ namespace LifeGameManager
                     AddLine("sql: " + cmd.CommandText, 2);
                     using (MySqlDataReader rdr = cmd.ExecuteReader())
                     {
+                        ret = new Dictionary<string, object>();
                         while (rdr.Read())
                         {
-                            if (ret == null) ret = new Dictionary<string, object>();
-
                             string s = "";
                             for (int i = 0; i < rdr.FieldCount; ++i)
                             {
@@ -275,6 +274,7 @@ namespace LifeGameManager
             }
             catch (Exception ex)
             {
+                ret = null;
                 AddLine("Error during GetNextJob: " + ex.Message + "\r\n" + ex.StackTrace);
                 conn = null;
                 state = LGMAppState.NotConnected;
@@ -339,6 +339,7 @@ namespace LifeGameManager
                 AddLine("CLOSING CONNECTION");
                 try
                 {
+                    state = LGMAppState.Closing;
                     conn.Close();
                     state = LGMAppState.NotConnected;
                 }
@@ -373,19 +374,36 @@ namespace LifeGameManager
 
 
         private void DoMyJob()
-        {
-            if (conn == null)
-            {
-                AddLine("Not connected to database, reconnecting...");
-                ConnectToDatabase();
-            }
+        {            
             AddLine("checking database for new jobs", 2);
+
+            int errorCount = 0;
 
             for (int i = 0; i < taskIDs.Length; ++i)
             {
+                if (conn == null)
+                {
+                    AddLine("Not connected to database, reconnecting...");
+                    ConnectToDatabase();
+                }
+
                 int taskID = taskIDs[(i + taskIDoffset) % taskIDs.Length];
-                Dictionary<string, object> job = GetNextJob(taskID);
-                if (job != null)
+                Dictionary<string, object> job = GetNextJob(taskID);                
+                if (job == null)
+                {
+                    AddLine("Error during job acquisition. Retrying...");
+                    i--;
+                    errorCount++;
+                    if (errorCount > 5)
+                    {
+                        AddLine("Too much retrying, lets wait a bit.");
+                        return;
+                    }
+                    continue;
+                }
+                errorCount = 0;
+
+                if (job.Count > 0)
                 {
                     if (debugModeEnabled && !job["Neptun"].ToString().StartsWith("TEST"))
                     {
@@ -573,6 +591,7 @@ namespace LifeGameManager
                 {
                     stopProcessTimeoutTimer();
                 }
+                Thread.Sleep(3000);
             });
         }
 
